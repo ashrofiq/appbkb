@@ -62,25 +62,6 @@ body.dark .zoomBtn:hover:not(:disabled){background:rgba(255,255,255,.22)}
 .side-logout button:hover{background:#fae0dc}
 body.dark .side-logout button{background:#2a1c1c;border-color:#5a2f2c;color:#ff8f82}
 body.dark .side-logout button:hover{background:#3a2323}
-/* jendela input presensi: lebar & compact */
-.modal.xwide{max-width:min(1240px,97vw)}
-.modal.xwide .mb{max-height:calc(100vh - 175px);padding:14px 18px}
-.kh-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start}
-@media(max-width:1000px){.kh-grid{grid-template-columns:1fr}}
-.kh-tools{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
-.kh-tbl{min-width:0;font-size:12px;border:1px solid #e3eaf2;border-radius:8px;overflow:hidden}
-.kh-tbl th{padding:5px 7px;font-size:10.5px}
-.kh-tbl td{padding:2px 7px;vertical-align:middle;line-height:1.2}
-.kh-tbl .kh-no{width:30px;color:#8494a4}
-.kh-tbl .kh-st{white-space:nowrap;width:128px}
-.kh-tbl .kh-st label{display:inline-flex;align-items:center;gap:2px;margin:0 5px 0 0;font-weight:700;font-size:12px;text-transform:none;letter-spacing:0;cursor:pointer}
-.kh-tbl .kh-st input{width:auto;margin:0;padding:0}
-.kh-tbl .kh-H{color:#1e8449}.kh-tbl .kh-S{color:#d68910}.kh-tbl .kh-I{color:#1a73e8}.kh-tbl .kh-A{color:#c0392b}
-.kh-tbl .ketIn{padding:2px 6px;font-size:11.5px;height:24px;min-width:0}
-.kh-tbl tbody tr:nth-child(even){background:#fafcfe}
-body.dark .kh-tbl{border-color:#243442}
-body.dark .kh-tbl tbody tr:nth-child(even){background:#192533}
-.xwide-note .notif{margin-bottom:8px;padding:7px 10px;font-size:12.5px}
 .layout{display:flex;min-height:calc(100vh - 56px)}
 .side{width:206px;background:#fff;border-right:1px solid #dde5ee;padding:6px 0 10px;flex-shrink:0;overflow-y:auto;height:calc(100vh - 56px);position:sticky;top:56px}
 .side a{display:flex;align-items:center;gap:8px;padding:6px 13px;color:#3c4c5c;text-decoration:none;font-size:12.5px;font-weight:500;border-left:3px solid transparent;line-height:1.25}
@@ -3589,8 +3570,7 @@ var APP_CHANGELOG = [
   ]},
   { v:'1.4.7', tgl:'2026-10-20', cat:[
     'Tombol Keluar dipindah ke sidebar, tepat di bawah keterangan versi dan build',
-    'Tombol zoom (A− / A+) di sebelah tombol mode gelap/terang untuk memperkecil/memperbesar tampilan konten; pilihan tersimpan',
-    'Jendela Input / Edit Presensi diperlebar dan daftar siswa dibuat lebih compact (dua kolom pada layar lebar)'
+    'Tombol zoom (A− / A+) di sebelah tombol mode gelap/terang untuk memperkecil/memperbesar tampilan konten; pilihan tersimpan'
   ]},
   { v:'1.4.6', tgl:'2026-10-19', cat:[
     'Pengiriman WhatsApp: jeda minimal 10 detik (diacak 10–14 detik) + istirahat tiap 15 pesan; batas pesan per hari, jam kirim, dan berhenti otomatis saat gagal beruntun (diatur di Setting > WhatsApp)',
@@ -7233,14 +7213,13 @@ function formInputKehadiran(tglDefault, kelasDefault){
   window._khIsEdit = false;
   var tgl = tglDefault || today();
   openModal('Input / Edit Presensi Siswa',
-    '<div class="xwide-note"><div class="notif new" id="khNotif">✔ Pilih tanggal & kelas. Jika data sudah ada → mode EDIT. Jika belum → semua siswa Hadir.</div></div>'+
+    '<div class="notif new" id="khNotif">✔ Pilih tanggal & kelas. Jika data sudah ada → mode EDIT. Jika belum → semua siswa Hadir.</div>'+
     '<div class="row r2">'+
       '<div class="fg"><label>Tanggal <span style="color:#e74c3c">*</span></label><input type="date" id="khTgl" value="'+tgl+'" onchange="cekKehadiran()"></div>'+
       '<div class="fg"><label>Kelas <span style="color:#e74c3c">*</span></label><select id="khKelas" onchange="cekKehadiran()"><option value="">-- Pilih --</option>'+kelasList.map(function(k){ return '<option '+(k===kelasDefault?'selected':'')+'>'+esc(k)+'</option>'; }).join('')+'</select></div>'+
     '</div>'+
     '<div id="khList"><div class="empty">Pilih tanggal dan kelas.</div></div>',
     '<button class="btn2" onclick="closeModal()">Batal</button><button class="btn" onclick="simpanKehadiran()">💾 Simpan</button>', true);
-  $('#modal').classList.add('xwide');
   zoomTerapkan();
   if(kelasDefault){ setTimeout(function(){ cekKehadiran(); }, 20); }
 }
@@ -7272,22 +7251,17 @@ function renderKehadiranTable(kelas, statusMap, ketMap, autoHadir){
   var list = (ST.siswa||[]).filter(function(s){ return s.Kelas===kelas; }).sort(function(a,b){ return a.Nama.localeCompare(b.Nama); });
   if(!list.length){ listEl.innerHTML = '<div class="empty">Tidak ada siswa.</div>'; return; }
   statusMap = statusMap || {}; ketMap = ketMap || {};
-  var half = list.length >= 14 ? Math.ceil(list.length/2) : list.length;
-  function tabel(from, to){
-    return '<table class="kh-tbl"><thead><tr><th class="kh-no">No</th><th>Nama Siswa</th><th class="kh-st">Status</th><th>Keterangan</th></tr></thead><tbody>'+
-      list.slice(from, to).map(function(s, k){
-        var i = from + k;
-        var cur = statusMap[String(s.NIS)] || (autoHadir ? 'H' : ''); var ket = ketMap[String(s.NIS)] || '';
-        return '<tr data-nis="'+esc(s.NIS)+'" data-nama="'+esc(s.Nama)+'" data-st="'+esc(cur)+'"><td class="kh-no">'+(i+1)+'</td><td>'+esc(s.Nama)+'</td>'+
-          '<td class="kh-st">'+['H','S','I','A'].map(function(st){
-            return '<label class="kh-'+st+'"><input type="radio" name="st_'+i+'" value="'+st+'" '+(cur === st ? 'checked' : '')+' onchange="this.closest(\'tr\').dataset.st=\''+st+'\'">'+st+'</label>';
-          }).join('')+'</td>'+
-          '<td><input class="ketIn" value="'+esc(ket)+'" placeholder="-"></td></tr>';
-      }).join('')+'</tbody></table>';
-  }
-  listEl.innerHTML = '<div class="kh-tools"><button class="btn4 btn-sm" onclick="setAllHadir(\'H\')">Semua Hadir</button> <button class="btn2 btn-sm" onclick="setAllHadir(\'\')">Reset</button>'+
-    '<span class="small" style="margin-left:auto">'+list.length+' siswa • H=Hadir S=Sakit I=Izin A=Alpa</span></div>'+
-    '<div class="kh-grid">'+tabel(0, half)+(half < list.length ? tabel(half, list.length) : '')+'</div>';
+  listEl.innerHTML = '<div style="margin-bottom:9px"><button class="btn4 btn-sm" onclick="setAllHadir(\'H\')">Semua Hadir</button> <button class="btn2 btn-sm" onclick="setAllHadir(\'\')">Reset</button></div>'+
+    '<div class="tw"><table><thead><tr><th style="width:44px">No</th><th>Nama Siswa</th><th style="width:280px">Status</th><th style="width:220px">Keterangan</th></tr></thead><tbody>'+
+    list.map(function(s,i){
+      var cur = statusMap[String(s.NIS)] || (autoHadir ? 'H' : ''); var ket = ketMap[String(s.NIS)] || '';
+      return '<tr data-nis="'+esc(s.NIS)+'" data-nama="'+esc(s.Nama)+'" data-st="'+esc(cur)+'"><td>'+(i+1)+'</td><td>'+esc(s.Nama)+'</td>'+
+        '<td>'+['H','S','I','A'].map(function(st){
+          var checked = (cur === st) ? 'checked' : '';
+          return '<label style="display:inline-flex;align-items:center;gap:3px;margin-right:11px;font-weight:500;font-size:12.5px"><input type="radio" name="st_'+i+'" value="'+st+'" '+checked+' onchange="this.closest(\'tr\').dataset.st=\''+st+'\'" style="width:auto"> '+st+'</label>';
+        }).join('')+'</td>'+
+        '<td><input class="ketIn" value="'+esc(ket)+'" style="padding:5px 8px;font-size:12px"></td></tr>';
+    }).join('')+'</tbody></table></div>';
 }
 function setAllHadir(v){ $$('#khList tbody tr').forEach(function(tr){ tr.dataset.st = v || ''; var rads = tr.querySelectorAll('input[type=radio]'); for(var i=0;i<rads.length;i++) rads[i].checked = v ? (rads[i].value === v) : false; }); }
 function simpanKehadiran(){
