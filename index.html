@@ -3585,6 +3585,8 @@ var APP_CHANGELOG = [
   { v:'1.4.7', tgl:'2026-10-20', cat:[
     'Tombol Keluar dipindah ke sidebar, tepat di bawah keterangan versi dan build',
     'Notifikasi proses (blok hijau/merah di kanan atas) digeser ke bawah header biru',
+    'Menu Presensi: tab "Daftar Siswa Tidak Masuk Hari Ini" diganti nama menjadi "Absen Hari Ini"',
+    'Menu Presensi: tab baru "Bandingkan Absen" untuk membandingkan jumlah S/I/A dua periode per siswa (filter periode, kelas, S/I/A; diurutkan dari yang paling banyak tidak hadir; bisa cetak dan export)',
     'Tombol zoom (A− / A+) di sebelah tombol mode gelap/terang untuk memperkecil/memperbesar tampilan konten; pilihan tersimpan',
     'Jendela Input / Edit Presensi diperlebar dan daftar siswa dibuat lebih compact (dua kolom pada layar lebar)'
   ]},
@@ -6734,8 +6736,9 @@ function renderKehadiran(){
   var activeTab = ST.khTab || 'harian';
   var tabs = [
     {id:'harian', label:'📅 Harian'},
-    {id:'daftar', label:'📋 Daftar Siswa Tidak Masuk Hari Ini'},
+    {id:'daftar', label:'📋 Absen Hari Ini'},
     {id:'matriks', label:'📊 Absen Bulanan'},
+    {id:'bandingkan', label:'⚖️ Bandingkan Absen'},
     {id:'laporan', label:'📈 Laporan'}
   ];
   $('#main').innerHTML = '<div class="hd"><div><h2>📋 Presensi</h2><div class="sub">Kelola presensi siswa</div></div>'+
@@ -6754,6 +6757,7 @@ function khTabGo(t){
   $$('.tabs .tab').forEach(function(b){ b.classList.toggle('on', b.dataset.tab === t); });
   if(t === 'harian') renderKhHarian();
   else if(t === 'matriks') renderKhMatriks();
+  else if(t === 'bandingkan') renderKhBandingkan();
   else if(t === 'daftar') renderKhDaftar();
   else if(t === 'laporan') renderKhLaporan();
 }
@@ -6834,7 +6838,7 @@ function loadKhHarian(tglView){
 }
 function renderKhDaftar(){
   var ks = (kelasSaya()||[]).slice().sort();
-  $('#khContent').innerHTML = '<div class="card"><div class="hd" style="margin-bottom:10px"><div><h2>📋 Daftar Siswa Tidak Masuk Hari Ini</h2><div class="sub">Siswa berstatus Sakit, Izin, atau Alpa pada '+esc(tglPanjang(today()))+'</div></div><div class="tools"><button class="btn2 btn-sm" onclick="loadKhDaftar(true)">↻ Perbarui</button></div></div>'+
+  $('#khContent').innerHTML = '<div class="card"><div class="hd" style="margin-bottom:10px"><div><h2>📋 Absen Hari Ini</h2><div class="sub">Siswa berstatus Sakit, Izin, atau Alpa pada '+esc(tglPanjang(today()))+'</div></div><div class="tools"><button class="btn2 btn-sm" onclick="loadKhDaftar(true)">↻ Perbarui</button></div></div>'+
     '<div class="fbar" style="padding:8px 10px;margin-bottom:10px"><div class="fg" style="max-width:300px"><label>Kelas</label><select id="khDaftarKelas" onchange="loadKhDaftar(false)"><option value="">Semua kelas</option>'+ks.map(function(k){ return '<option value="'+esc(k)+'">'+esc(k)+'</option>'; }).join('')+'</select></div></div>'+
     '<div id="khDaftarView"><div class="empty">Memuat daftar absensi hari ini…</div></div></div>';
   loadKhDaftar(true);
@@ -6962,6 +6966,156 @@ function exportMatrix(){
   });
   exportExcel('Absen_'+d.kelas.replace(/\s+/g,'_')+'_'+d.bulan, head, body);
 }
+/* ====== BANDINGKAN ABSEN ====== */
+function bdDefault(){
+  var t = today(), cur = t.slice(0,7), y = parseInt(cur.slice(0,4),10), m = parseInt(cur.slice(5,7),10);
+  var pm = (m === 1) ? ((y-1)+'-12') : (y+'-'+pad2(m-1));
+  var pmy = parseInt(pm.slice(0,4),10), pmm = parseInt(pm.slice(5,7),10);
+  return {
+    p1:{ mode:'bulan', bulan:pm, dari:pm+'-01', sampai:pm+'-'+pad2(new Date(pmy,pmm,0).getDate()) },
+    p2:{ mode:'bulan', bulan:cur, dari:cur+'-01', sampai:t },
+    kelas:'', st:'', nol:false
+  };
+}
+function bdPeriodeHTML(n, p){
+  var bln = p.mode === 'bulan';
+  return '<div class="fg" style="min-width:290px"><label>Periode '+n+'</label><div style="display:flex;gap:6px;flex-wrap:wrap">'+
+    '<select id="bdM'+n+'" onchange="bdMode('+n+')" style="flex:0 0 120px"><option value="bulan"'+(bln?' selected':'')+'>Bulanan</option><option value="rentang"'+(bln?'':' selected')+'>Rentang</option></select>'+
+    '<input type="month" id="bdB'+n+'" value="'+esc(p.bulan)+'" style="flex:1;min-width:130px;'+(bln?'':'display:none')+'">'+
+    '<span id="bdR'+n+'" style="flex:1;display:'+(bln?'none':'flex')+';gap:6px"><input type="date" id="bdD'+n+'" value="'+esc(p.dari)+'" style="min-width:120px"><input type="date" id="bdS'+n+'" value="'+esc(p.sampai)+'" style="min-width:120px"></span>'+
+    '</div></div>';
+}
+function bdMode(n){
+  var bln = $('#bdM'+n).value === 'bulan';
+  $('#bdB'+n).style.display = bln ? '' : 'none';
+  $('#bdR'+n).style.display = bln ? 'none' : 'flex';
+}
+function bdRead(n){
+  var mode = $('#bdM'+n).value, dari, sampai, label, bulan = $('#bdB'+n).value;
+  if(mode === 'bulan'){
+    if(!bulan) return null;
+    var y = parseInt(bulan.slice(0,4),10), m = parseInt(bulan.slice(5,7),10);
+    dari = bulan+'-01'; sampai = bulan+'-'+pad2(new Date(y,m,0).getDate());
+    label = monthName(m)+' '+y;
+  } else {
+    dari = $('#bdD'+n).value; sampai = $('#bdS'+n).value;
+    if(!dari || !sampai) return null;
+    if(dari > sampai){ var t = dari; dari = sampai; sampai = t; }
+    label = tgl(dari)+' s.d. '+tgl(sampai);
+  }
+  return { mode:mode, bulan:bulan, dari:dari, sampai:sampai, label:label };
+}
+function renderKhBandingkan(){
+  var d = ST.cache.bd || bdDefault();
+  var ks = (kelasSaya()||[]).slice().sort();
+  $('#khContent').innerHTML = '<div class="card"><div class="hd" style="margin-bottom:10px"><div><h2>⚖️ Bandingkan Absen</h2><div class="sub">Bandingkan jumlah Sakit, Izin, dan Alpa siswa pada dua periode. Diurutkan dari siswa yang paling banyak tidak hadir.</div></div></div>'+
+    '<div class="fbar" style="align-items:flex-end">'+
+      bdPeriodeHTML(1, d.p1)+bdPeriodeHTML(2, d.p2)+
+      '<div class="fg" style="max-width:220px"><label>Kelas</label><select id="bdKelas"><option value="">Semua kelas</option>'+ks.map(function(k){ return '<option value="'+esc(k)+'"'+(d.kelas===k?' selected':'')+'>'+esc(k)+'</option>'; }).join('')+'</select></div>'+
+      '<div class="fg" style="max-width:200px"><label>S / I / A</label><select id="bdSt"><option value="">Semua (S, I, A)</option><option value="S"'+(d.st==='S'?' selected':'')+'>Sakit (S)</option><option value="I"'+(d.st==='I'?' selected':'')+'>Izin (I)</option><option value="A"'+(d.st==='A'?' selected':'')+'>Alpa (A)</option></select></div>'+
+    '</div>'+
+    '<div class="tools" style="margin:2px 0 10px;align-items:center;gap:10px"><label style="display:flex;align-items:center;gap:5px;font-size:12.5px;cursor:pointer"><input type="checkbox" id="bdNol" style="width:auto"'+(d.nol?' checked':'')+'> Tampilkan siswa tanpa absen</label>'+
+      '<button class="btn" onclick="bdTampilkan(true)">🔍 Tampilkan</button><button class="btn2" onclick="cetakBandingkan()">🖨 Cetak</button><button class="btn4" onclick="exportBandingkan()">⬇ Export</button></div>'+
+    '<div id="bdView"><div class="empty">Memuat…</div></div></div>';
+  bdTampilkan(false);
+}
+function bdHitung(rows){
+  var m = {};
+  (rows||[]).forEach(function(r){
+    var st = String(r.Status||'').toUpperCase();
+    if(['S','I','A'].indexOf(st) < 0) return;
+    var nis = String(r.NIS);
+    m[nis] = m[nis] || { S:0, I:0, A:0 };
+    m[nis][st]++;
+  });
+  return m;
+}
+function bdTampilkan(force){
+  var vEl = $('#bdView'); if(!vEl) return;
+  var p1 = bdRead(1), p2 = bdRead(2);
+  if(!p1 || !p2){ vEl.innerHTML = '<div class="empty">Lengkapi Periode 1 dan Periode 2.</div>'; return; }
+  var kelas = $('#bdKelas').value, st = $('#bdSt').value, nol = $('#bdNol').checked;
+  ST.cache.bd = {
+    p1:{ mode:p1.mode, bulan:p1.bulan || p1.dari.slice(0,7), dari:p1.dari, sampai:p1.sampai },
+    p2:{ mode:p2.mode, bulan:p2.bulan || p2.dari.slice(0,7), dari:p2.dari, sampai:p2.sampai },
+    kelas:kelas, st:st, nol:nol
+  };
+  vEl.innerHTML = '<div class="empty">Memuat data absen…</div>';
+  Promise.all([ getHadirRowsRange(p1.dari, p1.sampai, !!force), getHadirRowsRange(p2.dari, p2.sampai, !!force) ]).then(function(res){
+    if(!$('#bdView')) return;
+    var m1 = bdHitung(res[0]), m2 = bdHitung(res[1]);
+    var cols = st ? [st] : ['S','I','A'];
+    var siswa = (siswaSaya()||[]).filter(function(s){ return !kelas || s.Kelas === kelas; });
+    function jml(o){ return cols.reduce(function(a,c){ return a + (o[c]||0); }, 0); }
+    var all = siswa.map(function(s){
+      var a = m1[String(s.NIS)] || { S:0, I:0, A:0 }, b = m2[String(s.NIS)] || { S:0, I:0, A:0 };
+      return { NIS:s.NIS, Nama:s.Nama, Kelas:s.Kelas, a:a, b:b, t1:jml(a), t2:jml(b) };
+    });
+    var tampil = all.filter(function(x){ return nol || (x.t1 + x.t2) > 0; });
+    tampil.sort(function(x,y){
+      return ((y.t1+y.t2) - (x.t1+x.t2)) || (y.t2 - x.t2) || (y.t1 - x.t1) || String(x.Nama).localeCompare(String(y.Nama));
+    });
+    ST.cache.bdData = { p1:p1, p2:p2, kelas:kelas, st:st, cols:cols, rows:tampil };
+    if(!siswa.length){ vEl.innerHTML = '<div class="empty">Tidak ada siswa.</div>'; return; }
+    var warna = { S:'#b9770e', I:'#1a73e8', A:'#c0392b' };
+    function sel(n, c){ return n ? '<b style="color:'+warna[c]+'">'+n+'</b>' : '<span style="color:#a9b4bf">0</span>'; }
+    var nc = cols.length;
+    var html = '<div class="hint" style="margin-bottom:9px"><b>Periode 1:</b> '+esc(p1.label)+' &nbsp;•&nbsp; <b>Periode 2:</b> '+esc(p2.label)+' &nbsp;•&nbsp; <b>Kelas:</b> '+esc(kelas || 'Semua')+'<br>S=Sakit, I=Izin, A=Alpa. Urutan: jumlah tidak hadir Periode 1 + Periode 2 (terbanyak di atas).'+(!nol && all.length > tampil.length ? ' '+(all.length - tampil.length)+' siswa tanpa absen disembunyikan.' : '')+'</div>';
+    if(!tampil.length){ vEl.innerHTML = html + '<div class="empty">Tidak ada siswa yang tidak hadir pada kedua periode.</div>'; return; }
+    html += '<div class="tw"><table style="min-width:auto"><thead><tr><th rowspan="2" style="width:38px">No</th><th rowspan="2" style="min-width:170px">Nama</th>'+
+      '<th colspan="'+nc+'" style="text-align:center">Periode 1<div class="small" style="font-weight:400;text-transform:none">'+esc(p1.label)+'</div></th>'+
+      '<th rowspan="2" style="width:18px;background:transparent;border:0"></th>'+
+      '<th colspan="'+nc+'" style="text-align:center">Periode 2<div class="small" style="font-weight:400;text-transform:none">'+esc(p2.label)+'</div></th></tr><tr>'+
+      cols.map(function(c){ return '<th style="text-align:center;width:46px">'+c+'</th>'; }).join('')+
+      cols.map(function(c){ return '<th style="text-align:center;width:46px">'+c+'</th>'; }).join('')+'</tr></thead><tbody>';
+    var tot1 = { S:0, I:0, A:0 }, tot2 = { S:0, I:0, A:0 };
+    tampil.forEach(function(x, i){
+      ['S','I','A'].forEach(function(c){ tot1[c] += x.a[c]; tot2[c] += x.b[c]; });
+      html += '<tr><td>'+(i+1)+'</td><td>'+esc(x.Nama)+(kelas ? '' : ' <span class="small">('+esc(x.Kelas)+')</span>')+'</td>'+
+        cols.map(function(c){ return '<td style="text-align:center">'+sel(x.a[c], c)+'</td>'; }).join('')+
+        '<td style="border:0;background:transparent"></td>'+
+        cols.map(function(c){ return '<td style="text-align:center">'+sel(x.b[c], c)+'</td>'; }).join('')+'</tr>';
+    });
+    html += '<tr style="font-weight:700;background:#f5f8fc"><td colspan="2" style="text-align:right">Jumlah</td>'+
+      cols.map(function(c){ return '<td style="text-align:center">'+tot1[c]+'</td>'; }).join('')+'<td style="border:0;background:transparent"></td>'+
+      cols.map(function(c){ return '<td style="text-align:center">'+tot2[c]+'</td>'; }).join('')+'</tr>';
+    html += '</tbody></table></div>';
+    vEl.innerHTML = html;
+  }).catch(function(e){ vEl.innerHTML = '<div class="notif err">Gagal memuat data: '+esc(e.message)+'</div>'; });
+}
+function cetakBandingkan(){
+  var d = ST.cache.bdData; if(!d || !d.rows.length) return toast('Tampilkan data dulu','er');
+  var nc = d.cols.length;
+  var html = '<h2 class="rptitle">PERBANDINGAN ABSEN SISWA</h2><div class="rpsub">Periode 1: '+esc(d.p1.label)+' • Periode 2: '+esc(d.p2.label)+' • Kelas: '+esc(d.kelas || 'Semua')+'</div>';
+  html += '<table class="rp"><thead><tr><th rowspan="2">No</th><th rowspan="2">Nama</th>'+(d.kelas ? '' : '<th rowspan="2">Kelas</th>')+
+    '<th colspan="'+nc+'">Periode 1</th><th colspan="'+nc+'">Periode 2</th></tr><tr>'+
+    d.cols.map(function(c){ return '<th>'+c+'</th>'; }).join('')+d.cols.map(function(c){ return '<th>'+c+'</th>'; }).join('')+'</tr></thead><tbody>';
+  var t1 = { S:0, I:0, A:0 }, t2 = { S:0, I:0, A:0 };
+  d.rows.forEach(function(x, i){
+    ['S','I','A'].forEach(function(c){ t1[c] += x.a[c]; t2[c] += x.b[c]; });
+    html += '<tr><td>'+(i+1)+'</td><td>'+esc(x.Nama)+'</td>'+(d.kelas ? '' : '<td>'+esc(x.Kelas)+'</td>')+
+      d.cols.map(function(c){ return '<td style="text-align:center">'+x.a[c]+'</td>'; }).join('')+
+      d.cols.map(function(c){ return '<td style="text-align:center">'+x.b[c]+'</td>'; }).join('')+'</tr>';
+  });
+  html += '<tr style="font-weight:700"><td colspan="'+(d.kelas ? 2 : 3)+'" style="text-align:right">Jumlah</td>'+
+    d.cols.map(function(c){ return '<td style="text-align:center">'+t1[c]+'</td>'; }).join('')+
+    d.cols.map(function(c){ return '<td style="text-align:center">'+t2[c]+'</td>'; }).join('')+'</tr></tbody></table>';
+  printRaw('Bandingkan Absen', html, ttdGuruBKHTML(today()));
+}
+function exportBandingkan(){
+  var d = ST.cache.bdData; if(!d || !d.rows.length) return toast('Tampilkan data dulu','er');
+  var head = ['No','NIS','Nama','Kelas'];
+  d.cols.forEach(function(c){ head.push('Periode 1 - '+c); });
+  d.cols.forEach(function(c){ head.push('Periode 2 - '+c); });
+  var body = d.rows.map(function(x, i){
+    var row = [i+1, x.NIS, x.Nama, x.Kelas];
+    d.cols.forEach(function(c){ row.push(x.a[c]); });
+    d.cols.forEach(function(c){ row.push(x.b[c]); });
+    return row;
+  });
+  exportExcel('Bandingkan_Absen', head, body);
+}
+/* ====== END BANDINGKAN ABSEN ====== */
 function renderKhLaporan(){
   var mode = ST.cache.khLaporanMode || 'bulan';
   var bln = ST.cache.khLaporanBulan || today().slice(0,7);
