@@ -238,6 +238,9 @@ tr.rawan-t4 .tag{background:#fdecea;color:#c0392b}
 .dash-stat.p{border-left-color:#8e44ad}
 .dash-stat.b{border-left-color:#2980b9}
 .dash-stat.pk{border-left-color:#e84393}
+.dash-pop-tbl th,.dash-pop-tbl td{padding:5px 6px}
+.dash-pop-tbl th.jam,.dash-pop-tbl td.jam{width:52px;max-width:52px;white-space:nowrap;text-align:center}
+.dash-pop-tbl th.jam{white-space:normal;line-height:1.15}
 .dash-stat.click{cursor:pointer;transition:transform .12s,box-shadow .12s}
 .dash-stat.click:hover{transform:translateY(-1px);box-shadow:0 3px 8px rgba(16,42,67,.15)}
 .presensi-checklist{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
@@ -4637,25 +4640,25 @@ function dashPop(jenis){
   var rows = data.slice().sort(function(a,b){
     return String(a.Kelas||'').localeCompare(String(b.Kelas||''), 'id', {numeric:true}) || String(a.Nama||'').localeCompare(String(b.Nama||''));
   });
-  var extraHead = jenis === 'izin' ? '<th style="width:80px">Jam Keluar</th><th>Alasan</th>'
-                : jenis === 'telat' ? '<th style="width:80px">Jam Datang</th><th>Alasan</th>'
+  var extraHead = jenis === 'izin' ? '<th class="jam">Jam<br>Keluar</th><th>Alasan</th>'
+                : jenis === 'telat' ? '<th class="jam">Jam<br>Datang</th><th>Alasan</th>'
                 : '<th>Keterangan</th>';
   var body;
   if(!rows.length){
     body = '<div class="empty" style="padding:16px">Tidak ada data pada hari ini.</div>';
   } else {
-    body = '<div class="tw"><table style="min-width:640px;font-size:12.5px"><thead><tr><th style="width:34px">No</th><th style="width:70px">Kelas</th><th>Nama Siswa</th>'+extraHead+'<th style="width:140px;text-align:center">WhatsApp</th></tr></thead><tbody>'+
+    body = '<div class="tw"><table class="dash-pop-tbl" style="min-width:520px;font-size:12.5px"><thead><tr><th style="width:30px">No</th><th style="width:62px">Kelas</th><th>Nama Siswa</th>'+extraHead+'<th style="width:118px;text-align:center">WhatsApp</th></tr></thead><tbody>'+
     rows.map(function(r,i){
       var s = (ST.siswa||[]).find(function(x){ return String(x.NIS)===String(r.NIS); }) || {};
       var nama = r.Nama || s.Nama || '-';
       var extra, pesanFn;
       if(jenis === 'izin'){
         var jk = String(r.JamKeluar||'').trim(), al = String(r.Alasan||'').trim();
-        extra = '<td>'+esc(jk||'-')+'</td><td style="white-space:pre-wrap">'+esc(al||'-')+'</td>';
+        extra = '<td class="jam">'+esc(jk||'-')+'</td><td style="white-space:pre-wrap">'+esc(al||'-')+'</td>';
         pesanFn = function(t, sapaan){ return 'Assalamu’alaikum '+sapaan+'. Kami dari BK SMAN 1 Klirong menghubungi terkait izin keluar sekolah '+(t==='siswa'?'Anda':'ananda '+nama)+' pada '+tglTxt+(jk?' (pukul '+jk+')':'')+'. Alasan tercatat: '+(al||'tidak dicantumkan')+'. Mohon konfirmasi kepada pihak sekolah. Terima kasih.'; };
       } else if(jenis === 'telat'){
         var jd = String(r.JamDatang||'').trim(), al2 = String(r.Alasan||'').trim();
-        extra = '<td>'+esc(jd||'-')+'</td><td style="white-space:pre-wrap">'+esc(al2||'-')+'</td>';
+        extra = '<td class="jam">'+esc(jd||'-')+'</td><td style="white-space:pre-wrap">'+esc(al2||'-')+'</td>';
         pesanFn = function(t, sapaan){ return 'Assalamu’alaikum '+sapaan+'. Kami dari BK SMAN 1 Klirong menghubungi terkait keterlambatan '+(t==='siswa'?'Anda':'ananda '+nama)+' pada '+tglTxt+(jd?' (datang pukul '+jd+')':'')+'. Alasan tercatat: '+(al2||'tidak dicantumkan')+'. Mohon perhatian dan bimbingan agar tidak terulang. Terima kasih.'; };
       } else {
         var ket = String(r.Keterangan||'').trim();
